@@ -135,12 +135,57 @@ void poster(ImVec2 a, ImVec2 size, float s)
     ImGui::PopFont();
     ImGui::PopStyleColor();
 }
+void stripes(ImVec2 a, ImVec2 size, float s)
+{
+    auto *d = ImGui::GetWindowDrawList();
+    ImVec2 b(a.x + size.x, a.y + size.y);
+    d->AddRectFilled(a, b, IM_COL32(27, 27, 27, 255));
+    d->PushClipRect(a, b, true);
+    // 45-degree bands, 22 px wide at scale 1, alternating two near-blacks.
+    float band = 22 * s;
+    for (float x = a.x - size.y; x < b.x; x += band * 2)
+        d->AddQuadFilled(ImVec2(x, b.y), ImVec2(x + band, b.y), ImVec2(x + band + size.y, a.y),
+                         ImVec2(x + size.y, a.y), IM_COL32(31, 31, 31, 255));
+    d->PopClipRect();
+}
+bool accent_button(const char *text, ImVec2 size, float font_size, ImVec4 fill, bool outline)
+{
+    ImVec4 text_color = ImGui::GetStyle().Colors[ImGuiCol_Text];
+    if (outline)
+    {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1, 1, 1, .08f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1, 1, 1, .14f));
+        ImGui::PushStyleColor(ImGuiCol_Text, text_color);
+        ImGui::PushStyleColor(ImGuiCol_Border, text_color);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 2 * ImGui::GetStyle().FontScaleMain);
+    }
+    else
+    {
+        auto shade = [&](float f) {
+            return ImVec4(std::min(1.f, fill.x * f), std::min(1.f, fill.y * f), std::min(1.f, fill.z * f), 1);
+        };
+        ImGui::PushStyleColor(ImGuiCol_Button, fill);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, shade(1.12f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, shade(.85f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.071f, .071f, .071f, 1));
+        ImGui::PushStyleColor(ImGuiCol_Border, fill);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.f);
+    }
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.f);
+    ImGui::PushFont(display_font, font_size);
+    bool hit = ImGui::Button(text, size);
+    ImGui::PopFont();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(5);
+    return hit;
+}
 bool play_button(const char *text, ImVec2 size, float font_size)
 {
-    ImGui::PushStyleColor(ImGuiCol_Button, gold());
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(.93f, .77f, .42f, 1));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(.78f, .60f, .26f, 1));
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.086f, .075f, .05f, 1));
+    ImGui::PushStyleColor(ImGuiCol_Button, fight_red());
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(.98f, .36f, .25f, 1));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(.78f, .21f, .13f, 1));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.071f, .071f, .071f, 1));
     ImGui::PushFont(display_font, font_size);
     bool hit = ImGui::Button(text, size);
     ImGui::PopFont();
