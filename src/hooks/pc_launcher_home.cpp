@@ -1,4 +1,5 @@
 #include "pc_launcher_home.h"
+#include "pc_launcher_art.h"
 #include "pc_ui_theme.h"
 #include "pc_ui_actions.h"
 #include "pc_mods.h"
@@ -62,9 +63,83 @@ static void ui_home_controls_row(UiHomeResult &r, const char *focus)
         ImGui::SetKeyboardFocusHere(-1);
 }
 
+// PLAY plus the reserved Online button, at the cursor.
+static void ui_home_play_row(UiHomeResult &r, float w, ImVec4 accent)
+{
+    float s = ImGui::GetStyle().FontScaleMain, buttons = 72 * s;
+    ImGui::BeginDisabled(pcui::mod_busy() || pcui::mod_recovery_needed());
+    r.play = pcui::accent_button("PLAY", ImVec2(std::min(240 * s, w * .4f), buttons), 40, accent);
+    ui_target("Play");
+    ImGui::EndDisabled();
+    if (ImGui::IsWindowAppearing())
+        ImGui::SetItemDefaultFocus();
+    ImGui::SameLine(0, 16 * s);
+    // Online play is planned; keep its place in the layout without a dead control.
+    ImGui::BeginDisabled(true);
+    pcui::accent_button("ONLINE MATCH", ImVec2(std::min(220 * s, w * .35f), buttons), 22, accent, true);
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Online play is coming in a future update.");
+}
+
+// "City in Hand" poster, drawn when the player supplied cover art from their own copy
+// (<data folder>/launcher/cover_city and cover_logo, see pc_launcher_art.h).
+static bool ui_home_cover_poster(UiHomeResult &r, float w, float h)
+{
+    const LauncherImage *city = launcher_image("cover_city"), *logo = launcher_image("cover_logo");
+    if (!city || !logo)
+        return false;
+    float s = ImGui::GetStyle().FontScaleMain, pad = 48 * s;
+    const ImVec4 amber(217 / 255.f, 119 / 255.f, 43 / 255.f, 1);
+    const ImU32 ground = IM_COL32(11, 8, 6, 255), clear = IM_COL32(11, 8, 6, 0);
+    ImGui::BeginChild("hero", ImVec2(w, h), ImGuiChildFlags_None,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground);
+    ImVec2 a = ImGui::GetCursorScreenPos(), b(a.x + w, a.y + h);
+    auto *d = ImGui::GetWindowDrawList();
+    d->AddRectFilled(a, b, ground);
+
+    // The city fills the right of the panel, cropped to cover its box, a little above centre.
+    ImVec2 box0(a.x + w * .38f, a.y), uv0(0, 0), uv1(1, 1);
+    float box_aspect = (b.x - box0.x) / h, image_aspect = city->width / city->height;
+    if (image_aspect > box_aspect)
+    {
+        float span = box_aspect / image_aspect;
+        uv0.x = (1 - span) * .5f;
+        uv1.x = uv0.x + span;
+    }
+    else
+    {
+        float span = image_aspect / box_aspect;
+        uv0.y = (1 - span) * .4f;
+        uv1.y = uv0.y + span;
+    }
+    d->AddImage(city->texture, box0, b, uv0, uv1);
+    float fade = (b.x - box0.x) * .6f;
+    d->AddRectFilledMultiColor(box0, ImVec2(box0.x + fade, b.y), ground, clear, clear, ground);
+    d->AddRectFilledMultiColor(ImVec2(a.x, b.y - 160 * s), b, clear, clear, ground, ground);
+
+    // Left column, vertically centred: kicker, the cover logo, then PLAY.
+    float column = std::min(440 * s, w * .55f);
+    float logo_h = column * logo->height / logo->width, kicker = 20 * s, buttons = 72 * s;
+    float y = a.y + (h - (kicker * 1.4f + 18 * s + logo_h + 36 * s + buttons)) * .5f;
+    ImGui::SetCursorScreenPos(ImVec2(a.x + pad, y));
+    ImGui::PushStyleColor(ImGuiCol_Text, amber);
+    pcui::heading("THE CITY IS YOURS TO TAKE", kicker);
+    ImGui::PopStyleColor();
+    y += kicker * 1.4f + 18 * s;
+    d->AddImage(logo->texture, ImVec2(a.x + pad, y), ImVec2(a.x + pad + column, y + logo_h));
+    y += logo_h + 36 * s;
+    ImGui::SetCursorScreenPos(ImVec2(a.x + pad, y));
+    ui_home_play_row(r, w, amber);
+    ImGui::EndChild();
+    return true;
+}
+
 // Fight Night poster panel: stripes, kicker, two-line headline, PLAY and Online.
 static void ui_home_poster(UiHomeResult &r, float w, float h)
 {
+    if (ui_home_cover_poster(r, w, h))
+        return;
     float s = ImGui::GetStyle().FontScaleMain, pad = 40 * s;
     ImGui::BeginChild("hero", ImVec2(w, h), ImGuiChildFlags_None,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoBackground);
@@ -90,19 +165,7 @@ static void ui_home_poster(UiHomeResult &r, float w, float h)
     y += title * 1.1f + 28 * s;
 
     ImGui::SetCursorScreenPos(ImVec2(a.x + pad, y));
-    ImGui::BeginDisabled(pcui::mod_busy() || pcui::mod_recovery_needed());
-    r.play = pcui::accent_button("PLAY", ImVec2(std::min(240 * s, w * .4f), buttons), 40, pcui::fight_red());
-    ui_target("Play");
-    ImGui::EndDisabled();
-    if (ImGui::IsWindowAppearing())
-        ImGui::SetItemDefaultFocus();
-    ImGui::SameLine(0, 16 * s);
-    // Online play is planned; keep its place in the layout without a dead control.
-    ImGui::BeginDisabled(true);
-    pcui::accent_button("ONLINE MATCH", ImVec2(std::min(220 * s, w * .35f), buttons), 22, pcui::fight_red(), true);
-    ImGui::EndDisabled();
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        ImGui::SetTooltip("Online play is coming in a future update.");
+    ui_home_play_row(r, w, pcui::fight_red());
     ImGui::EndChild();
 }
 

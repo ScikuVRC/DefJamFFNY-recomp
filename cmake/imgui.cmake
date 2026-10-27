@@ -45,3 +45,16 @@ else()
     target_compile_definitions(defjam_imgui PUBLIC IMGUI_DISABLE_DEBUG_TOOLS)
     target_link_libraries(defjam_imgui PUBLIC SDL3::SDL3 Vulkan::Vulkan)
 endif()
+
+# stb_image (public domain / MIT, thirdparty/stb-LICENSE.txt) decodes the optional launcher art a
+# player supplies from their own copy (src/hooks/pc_launcher_art.cpp). Pinned by commit and hash.
+set(DEFJAM_STB_COMMIT "003501f6d7a8668ce8b6d875e34dd97ad0d5d5b5")
+set(DEFJAM_STB_SHA256 "a6c31950b3bdf05eb92258768ba2a11bd44449490574b1aac67028452288c40d")
+FetchContent_Declare(stb
+    URL https://github.com/nothings/stb/archive/${DEFJAM_STB_COMMIT}.tar.gz
+    URL_HASH SHA256=${DEFJAM_STB_SHA256})
+FetchContent_GetProperties(stb)
+if(NOT stb_POPULATED)
+    FetchContent_Populate(stb)
+endif()
+target_include_directories(defjam_imgui PUBLIC ${stb_SOURCE_DIR})
