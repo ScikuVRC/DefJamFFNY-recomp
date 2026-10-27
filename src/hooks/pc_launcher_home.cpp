@@ -118,18 +118,19 @@ static bool ui_home_cover_poster(UiHomeResult &r, float w, float h)
     d->AddRectFilledMultiColor(box0, ImVec2(box0.x + fade, b.y), ground, clear, clear, ground);
     d->AddRectFilledMultiColor(ImVec2(a.x, b.y - 160 * s), b, clear, clear, ground, ground);
 
-    // Left column, vertically centred: kicker, the cover logo, then PLAY.
+    // PLAY sits at the bottom-left (as on the Cover Art mockup); the kicker and the cover logo
+    // are centred in the space above it.
     float column = std::min(440 * s, w * .55f);
     float logo_h = column * logo->height / logo->width, kicker = 20 * s, buttons = 72 * s;
-    float y = a.y + (h - (kicker * 1.4f + 18 * s + logo_h + 36 * s + buttons)) * .5f;
+    float play_y = b.y - pad - buttons;
+    float y = a.y + (play_y - a.y - (kicker * 1.4f + 18 * s + logo_h)) * .5f;
     ImGui::SetCursorScreenPos(ImVec2(a.x + pad, y));
     ImGui::PushStyleColor(ImGuiCol_Text, amber);
     pcui::heading("THE CITY IS YOURS TO TAKE", kicker);
     ImGui::PopStyleColor();
     y += kicker * 1.4f + 18 * s;
     d->AddImage(logo->texture, ImVec2(a.x + pad, y), ImVec2(a.x + pad + column, y + logo_h));
-    y += logo_h + 36 * s;
-    ImGui::SetCursorScreenPos(ImVec2(a.x + pad, y));
+    ImGui::SetCursorScreenPos(ImVec2(a.x + pad, play_y));
     ui_home_play_row(r, w, amber);
     ImGui::EndChild();
     return true;
