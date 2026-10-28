@@ -296,12 +296,86 @@ void defjam_test_rng(uint32_t stack)
     end_line();
 }
 
+/* ---- Per-step fingerprint (RECOMP_TEST_SYNC=1) ------------------------------------
+ *
+ * The netplay desync check: at every fight step, a hash of each part of the state
+ * the fight is made of, so two runs (or two players) can name the first step and
+ * the part at which they stopped being the same fight. Written as [TEST-SYNC],
+ * outside the state stream and its line budget; scripts/sync_diff.py compares two
+ * logs. The parts: the four fighter records whole, the pad table the fighters read
+ * (0x3B8F48, see PAD_TABLE below), and the fight's random number generators (match,
+ * the four AI ones, the utility one, CLogic's), at the addresses in
+ * docs/research/fight-determinism.md. */
+#define SYNC_STEPS_MAX  216000      /* an hour of steps */
+
+static uint32_t fnv(uint32_t base, uint32_t bytes)
+{
+    uint32_t h = 2166136261u, i;
+    for (i = 0; i < bytes; i += 4)
+        h = (h ^ MEM32(base + i)) * 16777619u;
+    return h;
+}
+
+/* RECOMP_TEST_SYNC_DUMP=<step>,<step>,...: at those steps, the raw words behind the
+ * hashes (each fighter record, then the pad table), one [TEST-SYNC] line each, so
+ * two runs can be compared word by word where their hashes part. */
+static void sync_dump(void)
+{
+    static char line[2 * STRIDE * 9 + 256];
+    const char *list = getenv("RECOMP_TEST_SYNC_DUMP");
+    char *end;
+    int slot, due = 0;
+    while (list && *list && !due) {
+        long long want = strtoll(list, &end, 10);
+        if (end == list) break;
+        due = want == (long long)s_step;
+        list = *end == ',' ? end + 1 : end;
+    }
+    if (!due) return;
+    for (slot = 0; slot <= SLOTS; slot++) {
+        uint32_t base = slot < SLOTS ? record(slot) : 0x003B8F48u;
+        uint32_t bytes = slot < SLOTS ? STRIDE : SLOTS * 0x20u, i;
+        size_t n = (size_t)snprintf(line, sizeof line,
+                                    "[TEST-SYNC] {\"event\":\"dump\",\"match\":%ld,\"step\":%lld,\"part\":%d,\"words\":\"",
+                                    (long)s_match, (long long)s_step, slot);
+        for (i = 0; i < bytes; i += 4)
+            n += (size_t)snprintf(line + n, sizeof line - n, "%08x", MEM32(base + i));
+        fprintf(stderr, "%s\"}\n", line);
+    }
+}
+
+static void sync_report(void)
+{
+    static int on = -1;
+    int slot;
+    if (on < 0) on = getenv("RECOMP_TEST_SYNC") != NULL;
+    if (!on || s_step > SYNC_STEPS_MAX) return;
+    sync_dump();
+    begin_line("TEST-SYNC", "sync");
+    put(",\"f\":[");
+    for (slot = 0; slot < SLOTS; slot++)
+        put("%s\"%08x\"", slot ? "," : "", fnv(record(slot), STRIDE));
+    /* And only what the state stream samples: state, position, facing, health, buttons. */
+    put("],\"g\":[");
+    for (slot = 0; slot < SLOTS; slot++) {
+        uint32_t r = record(slot);
+        uint32_t h = fnv(r + F_STATE, 4) ^ fnv(r + F_POS_X, 0x10) * 3u ^ fnv(r + F_FACING, 4) * 5u
+                   ^ fnv(r + F_HEALTH, 8) * 7u ^ fnv(r + F_HELD, 4) * 11u ^ fnv(r + F_PRESSED, 4) * 13u;
+        put("%s\"%08x\"", slot ? "," : "", h);
+    }
+    put("],\"pad\":\"%08x\",\"rng\":[\"%08x\",\"%08x\",\"%08x\",\"%08x\"]",
+        fnv(0x003B8F48u, SLOTS * 0x20u), fnv(0x003C1400u, 0x88u), fnv(0x003BFC70u, 4 * 0x88u),
+        fnv(0x0039C0E0u, 0x88u), fnv(0x00376FDCu, 0x88u));
+    end_line();
+}
+
 /* sub_00087700: one simulation step of a live fight is about to run. */
 void defjam_test_step(void)
 {
     int slot;
     if (!defjam_test_observations_enabled() || !s_in_match) return;
     s_step++;
+    sync_report();
     if (s_step == 1 || s_step == 300 || s_step == 900) draws_report(s_step == 1 ? "step1" : s_step == 300 ? "step300" : "step900");
 
     if (s_setup_due) {

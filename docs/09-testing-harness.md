@@ -158,10 +158,30 @@ python scripts/regress.py --only repeat --update-golden
 ```
 
 `repeat` tells a change in play from a disturbed run; use `--update-golden` when a
-change is meant to alter play. Longer stretches usually repeat too, but
-one pair of fights parted after 52 seconds for a reason not yet found, so the
-default comparison stops at thirty. A recorded stream is tied to the build and the
-fixture; record a new one after a change that is meant to alter play.
+change is meant to alter play. Longer stretches do not reliably repeat: pairs part
+when a fighter reaches the crowd at the edge of the ring (40 s to 2.5 min in
+measured pairs; docs/research/crowd-nondeterminism.md), so the default comparison
+stops at thirty. A recorded stream is tied to the build and the fixture; record a
+new one after a change that is meant to alter play.
+
+A first-time tip (the crowd's WEAPON, about 28 seconds in) pauses the fight until A
+is pressed, and fight steps do not run while it is up. With `--step-input` the suite
+therefore presses A on the pad every half second; during play the step input
+replaces the fighter's pad word, so the presses only close tips.
+
+### Per-step fingerprint
+
+`--test-env RECOMP_TEST_SYNC=1` writes a `[TEST-SYNC]` line at every fight step with
+a hash of each fighter record, of the gameplay fields alone (`play`), of the pad
+table and of the fight's generators. `python scripts/sync_diff.py A/game.log.err
+B/game.log.err` prints the first step at which each part differs. It is the
+desync check netplay will exchange between players. `RECOMP_TEST_SYNC_DUMP=2,600,...`
+adds the raw words of the fighter records and pad table at those steps.
+
+Parts that differ from the start and do not affect play: whole fighter records at
+step 2 (pose floats of the walk-in, which converge), the pad table (the live A
+presses above), the utility and CLogic generators (drawn outside the fight step).
+Compare the `play` and AI parts.
 
 Both options write to the game's memory (the pad table and two seed arguments).
 They are test controls, off unless asked for.

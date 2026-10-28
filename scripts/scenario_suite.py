@@ -362,7 +362,12 @@ def execute(args):
                 report['identity']['step_input_sha256'] = evidence.digest(source)
                 route = harness.ROUTES[args.route]
                 env = dict(route.get('env', {}), **env)
+                # A first-time tip (the crowd's WEAPON at about step 1,690) pauses the fight
+                # until A is pressed on the pad, and steps do not run while it is up, so the
+                # step-timed file cannot dismiss it. A live A every half second does; during
+                # play the step input replaces the fighter's pad word, so it changes nothing else.
                 run = harness.run_game(args.route, stages=bootstrap_stages(args.route), secs=route['secs'],
+                                       tail='@game.startgame(,a:12:3600:0.5:0.1',
                                        shots=route.get('shots', ''), preset=args.preset, env=env, quiet=True,
                                        until=route.get('until'), after=route.get('after', 0), inherit_recomp=False)
                 if route.get('until') and not harness.reached(run.summary, route['until']):

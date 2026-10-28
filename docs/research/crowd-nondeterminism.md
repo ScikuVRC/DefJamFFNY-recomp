@@ -72,6 +72,33 @@ background-crowd updates. Two runs of the same pinned fight are compared.
 
 None of these is in the code. Only the counting probe was kept.
 
+## Full matches with the per-step fingerprint (2026-10-28, measured)
+
+Pinned One on One (`fight-result`, seed 20261006, default step input), played to the
+result, compared with `RECOMP_TEST_SYNC=1` and `scripts/sync_diff.py`:
+
+| Pair | Crowd controls | Loading-window crowd updates | Play first differs | Result |
+|---|---|---|---|---|
+| 1 | none | (not logged) | about step 3,150 (52 s) | player won / CPU won |
+| 2 | none | (not logged) | step 8,868 (2 min 28 s) | not compared |
+| 3 | `hold,reseed` | 680 / 679 (hold at 880 never engaged) | step 2,435 (41 s) | CPU won both, different lengths |
+| 4 | `hold:600,reseed` | held at 600 in both | step 6,005 (100 s) | CPU won both, 10,168 / 6,218 steps |
+
+- Every split came as a fighter reached the crowd at the ring edge: thrown to
+  x ≈ 44 (pair 1, the CPU fighter then in state 109 in one run and 1 in the other),
+  z ≈ 43 (pair 2), z ≈ 42 (pair 4). Before that the fighter records, positions,
+  health and the AI generators agree step for step. The shove is now shown, not
+  only likely.
+- In pair 4 the player's fighter came back from the crowd at the same place in
+  both runs; the CPU fighter then walked elsewhere (toward x 30 in one, x 48 in the
+  other) 90 steps before its generators parted. It reacted to something it saw,
+  most likely a spectator (the WEAPON tip says one holds a weapon).
+- `hold:600` made the background crowd's count equal, and the split came later, but
+  the spectators' generator was still drawn 263 and 261 times by the first step.
+  `reseed` makes later draws agree, not the animations already chosen.
+- The loading window now has about 680 crowd updates, not 902: `hold`'s default of
+  880 no longer engages and should be lowered (or made relative).
+
 ## What a fix needs
 
 The spectators cannot be copied and restored: they are full actors. The window has
