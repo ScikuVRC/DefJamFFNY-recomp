@@ -23,9 +23,8 @@ their first pad (or keyboard). The host chooses the venue (Foundation, Terrordom
 Hunt's Point, The Pit) and, under "Fighters (advanced)", the fighters by the front
 end's numbers (56 and 55 by default; their names are not mapped yet).
 
-Do not pause during the match: pausing is not shared and stops only your game, which
-then waits for the other's inputs. The menus after the match are each player's own;
-the session ends with the match.
+Start is held back during a netplay fight (pausing would stop one game only). The
+menus after the match are each player's own; the session ends with the match.
 
 ## The session (src/hooks/netplay.c)
 
@@ -105,8 +104,13 @@ Terrordome (`RECOMP_NETPLAY_VENUE=6`) started there on both and stayed in sync.
 
 - Untested between two machines, over the internet, and with a physical pad (the
   emulated USB pad it was tested with is the same path).
-- Pausing is not shared: the pause menu's trigger is not found yet
-  (`sub_0007A0C0` only creates the menu object at match set-up).
+- Pausing: in a netplay fight Start is taken out of what the game's XInputGetState
+  (`sub_0027E075`) returns, from the first step until the match is decided, and
+  logged as `Start held back`. Unproven: in the matches the session starts, a Start
+  press on the live pad (harness route `netplay-pause`, and the same match without
+  netplay) opened no pause menu at all, so the filter never had anything to hold
+  back. The steps that did stop in an earlier probe were a first-time tip, which
+  lockstep mode turns off.
 - Player 2's slot is still the CPU's in the game's own set-up (its name on screen,
   its AI still running under the input).
 - TCP: a lost packet stalls both games until it is resent. UDP and rollback later.

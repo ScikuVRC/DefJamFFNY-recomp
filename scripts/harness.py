@@ -306,6 +306,16 @@ ROUTES = {
         "until": "game.getmatchsummary(", "after": 6, "secs": 900,
         "shots": "",
     },
+    # Start pressed in the fight (40 and 50 s after the main menu) on top of netplay-pad:
+    # in a netplay fight Start is filtered, so neither game may pause.
+    "netplay-pause": {
+        "help": "netplay with live pad input and Start pressed twice in the fight",
+        "stages": ["getscreeninfo(intmain/mainmenu=back@9999"],
+        "tail": "@getscreeninfo(intmain/mainmenu,right:25:1200:4:1.2,a:27:1200:0.8:0.15,"
+                "start:40:1:1:0.3,start:50:1:1:0.3",
+        "until": "game.getmatchsummary(", "after": 6, "secs": 900,
+        "shots": "",
+    },
     "fight-result": {
         "help": "One on One at the default venue, played until the game shows the match summary",
         "stages": ONE_ON_ONE_SETUP + ["controllersetup(1,=a@4+4x6"],

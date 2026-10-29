@@ -690,6 +690,28 @@ void netplay_step(void)
         desync_check();
 }
 
+/* The game's XInputGetState (sub_0027E075, docs/research/m4b-controller-ports.md) has
+ * just filled an XINPUT_STATE. Start opens the pause menu, which stops the fight
+ * steps on this game only; the other then waits for inputs that never come. So while
+ * a netplay fight runs (from the first step until the match is decided, phase 2 at
+ * 0x3B8F30) Start is taken out of the buttons word (+4, bit 0x10). */
+#define G_PHASE         0x003B8F30u
+#define XINPUT_START    0x0010u
+
+void netplay_filter_pad(uint32_t state)
+{
+    static int was_down;
+    int down;
+    if (!s_session_live || !s_current_step || !state || MEM32(G_PHASE) >= 2u) return;
+    down = (MEM16(state + 4) & XINPUT_START) != 0;
+    if (down && !was_down) {
+        fprintf(stderr, "[NETPLAY] Start held back at step %ld: pausing is off in a netplay fight\n", s_step);
+        fflush(stderr);
+    }
+    was_down = down;
+    MEM16(state + 4) = (uint16_t)(MEM16(state + 4) & ~XINPUT_START);
+}
+
 /* sub_001BAA00(record): a fighter is about to read its pad-table entry. Both games put
  * the same exchanged input there for both fighters. */
 void netplay_input(uint32_t actor)

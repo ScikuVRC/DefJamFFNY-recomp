@@ -236,6 +236,15 @@ void sub_001BAA00_enter(void)
     defjam_test_input(MEM32(g_esp + 4));
     netplay_input(MEM32(g_esp + 4));
 }
+/* The game's XInputGetState(handle, state): in a netplay fight Start is taken out of
+ * what it returns, so nobody can pause one game alone (netplay.c). */
+extern void sub_0027E075_gen(void);
+void sub_0027E075(void)
+{
+    uint32_t state = MEM32(g_esp + 8);
+    sub_0027E075_gen();
+    netplay_filter_pad(state);
+}
 void sub_001A6A80_enter(void)
 {
     if (defjam_test_observations_enabled())

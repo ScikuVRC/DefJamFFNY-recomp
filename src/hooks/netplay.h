@@ -57,6 +57,8 @@ void netplay_match_start(void);
 void netplay_step(void);
 /* sub_001BAA00(record): put the exchanged input in the fighter's pad-table entry. */
 void netplay_input(uint32_t actor);
+/* After the game's XInputGetState filled `state`: no Start (pause) in a netplay fight. */
+void netplay_filter_pad(uint32_t state);
 
 #ifdef __cplusplus
 }
