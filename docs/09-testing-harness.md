@@ -158,10 +158,12 @@ python scripts/regress.py --only repeat --update-golden
 ```
 
 `repeat` tells a change in play from a disturbed run; use `--update-golden` when a
-change is meant to alter play. Longer stretches do not reliably repeat: pairs part
-when a fighter reaches the crowd at the edge of the ring (40 s to 2.5 min in
-measured pairs; docs/research/crowd-nondeterminism.md), so the default comparison
-stops at thirty. A recorded stream is tied to the build and the fixture; record a
+change is meant to alter play. Longer stretches do not repeat by themselves: pairs
+part when a fighter reaches the crowd at the edge of the ring (40 s to 2.5 min in
+measured pairs), so the default comparison stops at thirty. With
+`--test-env RECOMP_TEST_CROWD=hold,spect,reseed` a whole match repeats step for step
+(docs/research/crowd-nondeterminism.md); a stream recorded with it is only
+comparable with runs that also have it. A recorded stream is tied to the build and the fixture; record a
 new one after a change that is meant to alter play.
 
 A first-time tip (the crowd's WEAPON, about 28 seconds in) pauses the fight until A
@@ -180,8 +182,9 @@ adds the raw words of the fighter records and pad table at those steps.
 
 Parts that differ from the start and do not affect play: whole fighter records at
 step 2 (pose floats of the walk-in, which converge), the pad table (the live A
-presses above), the utility and CLogic generators (drawn outside the fight step).
-Compare the `play` and AI parts.
+presses above), the utility generator (drawn outside the fight step) and the
+background crowd. Compare the `play`, AI and `spectators` parts. The spectator and
+background-crowd hashes are 0 until each crowd has updated once in the process.
 
 Both options write to the game's memory (the pad table and two seed arguments).
 They are test controls, off unless asked for.

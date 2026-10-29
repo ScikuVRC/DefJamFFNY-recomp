@@ -43,6 +43,11 @@ void defjam_crowd_match_start(void);
 void defjam_crowd_update(void);
 void defjam_crowd_seed(uint32_t generator, uint32_t stack);
 void defjam_crowd_step(void);
+int defjam_crowd_spectators(uint32_t self, uint32_t stack);
+void defjam_crowd_draw(uint32_t generator, uint32_t caller);
+void defjam_crowd_time(uint32_t self, uint32_t stack);
+int defjam_crowd_rng_swap(int enter);
+void defjam_crowd_spectator_setup(void);
 
 /* Read-only probes use the lifter's universal entry hooks. They do not alter
  * guest registers, stack, memory or the generated body. Off in normal play. */
@@ -158,11 +163,38 @@ void sub_001AD220_enter(void) { defjam_test_ai_seed(g_esp); }
 void sub_000AA0D0_enter(void) { defjam_test_generator_seed(g_ecx, g_esp); defjam_crowd_seed(g_ecx, g_esp); }
 /* Every draw (RECOMP_TEST_DRAWS): the C runtime's rand, the match generator, and the two
  * wrappers the object-form generators are drawn through; then the background crowd's update. */
-void sub_00200820_enter(void) { defjam_test_draw(1, MEM32(g_esp)); }
+void sub_00200820_enter(void) { defjam_test_draw(1, MEM32(g_esp)); defjam_crowd_draw(1, MEM32(g_esp)); }
 void sub_001BC6E0_enter(void) { defjam_test_draw(2, MEM32(g_esp)); }
-void sub_000AA300_enter(void) { defjam_test_draw(g_ecx, MEM32(g_esp)); }
-void sub_000AA340_enter(void) { defjam_test_draw(g_ecx, MEM32(g_esp)); }
+void sub_000AA300_enter(void) { defjam_test_draw(g_ecx, MEM32(g_esp)); defjam_crowd_draw(g_ecx, MEM32(g_esp)); }
+void sub_000AA340_enter(void) { defjam_test_draw(g_ecx, MEM32(g_esp)); defjam_crowd_draw(g_ecx, MEM32(g_esp)); }
 void sub_000DB870_enter(void) { defjam_test_crowd_update(); defjam_crowd_update(); }
+/* Time added to the background crowd (thiscall, dt); see defjam_crowd_time. */
+void sub_000DB620_enter(void) { defjam_crowd_time(g_ecx, g_esp); }
+/* The spectators' update (thiscall, dt, ret 4), reached only through its vtable; skipped
+ * while RECOMP_TEST_CROWD=spect holds them (see defjam_crowd_spectators). */
+extern void sub_00081170_gen(void);
+void sub_00081170(void)
+{
+    int swapped;
+    if (defjam_crowd_spectators(g_ecx, g_esp)) {
+        g_esp += 8;     /* ret 4: the return address and dt */
+        return;
+    }
+    swapped = defjam_crowd_rng_swap(1);
+    sub_00081170_gen();
+    if (swapped) defjam_crowd_rng_swap(0);
+}
+/* The spectator manager's set-up (its second vtable entry): with `spect` the spectators
+ * draw from a private copy of the shared generator at 0x33DB5C, seeded here. */
+extern void sub_00081240_gen(void);
+void sub_00081240(void)
+{
+    int swapped;
+    defjam_crowd_spectator_setup();
+    swapped = defjam_crowd_rng_swap(1);
+    sub_00081240_gen();
+    if (swapped) defjam_crowd_rng_swap(0);
+}
 /* Story scenes (src/hooks/scene_launcher.c): the scene loader names every scene it loads, and
  * the mode system's update plays one on request (RECOMP_SCENE, the overlay) through the game's
  * own developer cinema mode. */

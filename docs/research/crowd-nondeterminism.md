@@ -99,7 +99,32 @@ result, compared with `RECOMP_TEST_SYNC=1` and `scripts/sync_diff.py`:
 - The loading window now has about 680 crowd updates, not 902: `hold`'s default of
   880 no longer engages and should be lowered (or made relative).
 
-## What a fix needs
+## The fix: `RECOMP_TEST_CROWD=hold,spect,reseed` (2026-10-28, measured)
+
+Draws in the window were logged one by one in two runs (`probe`) and lined up per
+generator; each difference led to one cause:
+
+| Cause | Where | Fix |
+|---|---|---|
+| CLogic's generator seeded from the time-stamp counter, drawn once before the first step | `0x376FDC`, seeded by `sub_0008ABF0` | `reseed` pins its seed where it is seeded, not at the first step |
+| The background crowd held at N updates kept gathering time while held, released as extra frames | accumulator `+0x13C` (`sub_000DB620` adds a fixed 1/60 a frame; `sub_000DB730` takes whole frames) | `hold` clears it on release; default N lowered to 600 (about 680 updates happen) |
+| Spectators pick animations only once their data has loaded, at a host-timed update | `sub_00081170` (vtable at XBE `0x28D9B0`) → `sub_00080D40` → `sub_0007F3D0` → `sub_00080A00` → `sub_0007D2F0` | `spect` defers their update out of the window and runs it 500 times at the first step (time scale `0x3BDE80` = 0, as in loading) |
+| Spectators update once a presented frame, fighters once a fight step | the same | `spect` runs the update once a fight step instead |
+| Spectators' speeds (`+0x68`, 1 ± 0.3) and choices come from a generator shared with 236 sites, menus among them | `0x33DB5C`, six words, `sub_0002A390`; speeds in `sub_00080ED0` | `spect` gives them a private copy, seeded at their set-up (`sub_00081240`) |
+
+The time step is never host time: both crowds get a fixed 1/60 a frame.
+
+Result: two pinned full matches played to the same result at the same step (8,623),
+with fighters, AI generators, the match generator and the spectators equal at every
+step. The background crowd's hash still differs (no effect on play was seen) and so
+does the utility generator (`0x39C0E0`, drawn by UI code outside the step); the
+state stream's `rng_util` field differs from step 5,461, so a stream comparison of a
+whole match reports that one field.
+
+Not covered: the background crowd's own state; a second match in one process;
+other venues; Free For All.
+
+## What a fix needs (before 2026-10-28)
 
 The spectators cannot be copied and restored: they are full actors. The window has
 to be made repeatable instead: whatever arrives from disc during it must arrive at

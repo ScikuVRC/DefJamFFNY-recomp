@@ -17,7 +17,7 @@ import sys
 
 PARTS = ["fighter 0", "fighter 1", "fighter 2", "fighter 3", "pad table",
          "match rng", "AI rngs", "utility rng", "CLogic rng",
-         "play 0", "play 1", "play 2", "play 3"]
+         "play 0", "play 1", "play 2", "play 3", "spectators", "background crowd"]
 
 
 def fingerprints(path, match=None):
@@ -38,7 +38,7 @@ def fingerprints(path, match=None):
                 continue
             if r.get("event") != "sync":
                 continue
-            steps[r["step"]] = r["f"] + [r["pad"]] + r["rng"] + r.get("g", [])
+            steps[r["step"]] = r["f"] + [r["pad"]] + r["rng"] + r.get("g", ["", "", "", ""]) + r.get("crowd", [])
     return steps
 
 

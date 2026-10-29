@@ -342,6 +342,19 @@ static void sync_dump(void)
             n += (size_t)snprintf(line + n, sizeof line - n, "%08x", MEM32(base + i));
         fprintf(stderr, "%s\"}\n", line);
     }
+    /* Then the crowd's parts behind its two hashes: spectators as parts 100 + member,
+     * the background crowd's entries as part 200 (crowd_control.c). */
+    for (slot = 0; slot <= 64; slot++) {
+        uint32_t base, bytes, i;
+        size_t n;
+        if (!defjam_crowd_hash_part(slot, &base, &bytes)) continue;
+        n = (size_t)snprintf(line, sizeof line,
+                             "[TEST-SYNC] {\"event\":\"dump\",\"match\":%ld,\"step\":%lld,\"part\":%d,\"words\":\"",
+                             (long)s_match, (long long)s_step, slot < 64 ? 100 + slot : 200);
+        for (i = 0; i < bytes && n + 16 < sizeof line; i += 4)
+            n += (size_t)snprintf(line + n, sizeof line - n, "%08x", MEM32(base + i));
+        fprintf(stderr, "%s\"}\n", line);
+    }
 }
 
 static void sync_report(void)
@@ -366,6 +379,7 @@ static void sync_report(void)
     put("],\"pad\":\"%08x\",\"rng\":[\"%08x\",\"%08x\",\"%08x\",\"%08x\"]",
         fnv(0x003B8F48u, SLOTS * 0x20u), fnv(0x003C1400u, 0x88u), fnv(0x003BFC70u, 4 * 0x88u),
         fnv(0x0039C0E0u, 0x88u), fnv(0x00376FDCu, 0x88u));
+    put(",\"crowd\":[\"%08x\",\"%08x\"]", defjam_crowd_spectator_hash(), defjam_crowd_background_hash());
     end_line();
 }
 

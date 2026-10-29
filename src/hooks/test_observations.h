@@ -19,4 +19,11 @@ long defjam_test_shot_due(void);
 void defjam_test_generator_seed(uint32_t generator, uint32_t stack);
 void defjam_test_draw(uint32_t generator, uint32_t caller);
 void defjam_test_crowd_update(void);
+/* crowd_control.c: hashes of the spectators and of the background crowd's frames, for
+ * the per-step fingerprint; 0 until each has been seen this process. */
+uint32_t defjam_crowd_spectator_hash(void);
+uint32_t defjam_crowd_background_hash(void);
+/* The memory behind them: part 0..63 a spectator, 64 the background crowd's entries.
+ * Returns 0 when that part does not exist. */
+int defjam_crowd_hash_part(int part, uint32_t *base, uint32_t *bytes);
 #endif
