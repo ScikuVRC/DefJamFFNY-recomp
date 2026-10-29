@@ -114,8 +114,7 @@ Terrordome (`RECOMP_NETPLAY_VENUE=6`) started there on both and stayed in sync.
 - Player 2's slot is still the CPU's in the game's own set-up (its name on screen,
   its AI still running under the input).
 - TCP: a lost packet stalls both games until it is resent. UDP and rollback later.
-- Only One on One at the default venue with fixed fighters; choosing them is for the
-  dialog later.
+- Only One on One, at four venues; fighters are chosen by number, not by name yet.
 - The intermittent start-up stall (stuck at "press start": the USB host controller's
   first deferred routine ran seconds late and the driver gave up on the pad) is fixed
   in the toolkit: the timer thread, pinned to the guest core, went unscheduled for
