@@ -311,8 +311,8 @@ def execute(args):
                 env['RECOMP_TEST_OBSERVATIONS'] = '1'
             for item in args.test_env or []:
                 name, _, value = item.partition('=')
-                if not name.startswith('RECOMP_TEST_'):
-                    raise ValueError('--test-env only sets RECOMP_TEST_* variables')
+                if not name.startswith(('RECOMP_TEST_', 'RECOMP_WATCH_', 'RECOMP_LOCKSTEP')):
+                    raise ValueError('--test-env only sets RECOMP_TEST_*, RECOMP_WATCH_* and RECOMP_LOCKSTEP* variables')
                 env[name] = value
             if args.rng_seed is not None:
                 env['RECOMP_TEST_RNG_SEED'] = str(args.rng_seed)

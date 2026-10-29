@@ -31,6 +31,7 @@
 #include "recomp/gen/recomp_types.h"
 #include "recorder.h"
 #include "test_observations.h"
+#include "lockstep.h"
 
 #define ACTORS        0x003B92E0u
 #define STRIDE        0x12E8u
@@ -45,7 +46,6 @@
 #define G_CLOCK_SEC   0x003B9034u
 #define G_MATCH_TYPE  0x003B9084u
 #define G_TIME_SCALE  0x003B8F2Cu
-#define G_RNG_UTIL    0x0039C160u   /* a general-purpose generator also drawn outside the fight step */
 #define G_RNG_STATE   0x003C1404u   /* the match random number generator's state word */
 
 /* Fighter record fields (fighter-record-fields.md). */
@@ -278,18 +278,19 @@ void defjam_test_match_start(void)
 /* sub_001BC690(seed, increment): the match's random number generator is seeded. */
 void defjam_test_rng(uint32_t stack)
 {
-    const char *want;
-    uint32_t seed, increment;
+    uint32_t seed, increment, pinned;
     int forced = 0;
+    /* RECOMP_TEST_RNG_SEED, or lockstep mode (lockstep.c), replaces the seed; lockstep
+     * also the additive term, which a process's later matches take from the clock. */
+    if (defjam_pinned_seed(&pinned)) {
+        MEM32(stack + 4) = pinned;      /* the deliberate write; see the header */
+        forced = 1;
+    }
+    if (defjam_pinned_increment(&pinned))
+        MEM32(stack + 8) = pinned;
     if (!defjam_test_observations_enabled()) return;
     seed = MEM32(stack + 4);
     increment = MEM32(stack + 8);
-    want = getenv("RECOMP_TEST_RNG_SEED");
-    if (want && *want) {
-        seed = (uint32_t)strtoul(want, NULL, 0);
-        MEM32(stack + 4) = seed;        /* the one deliberate write; see the header */
-        forced = 1;
-    }
     if (!budget()) return;
     begin_line("TEST-EVENT", "rng");
     put(",\"seed\":%u,\"increment\":%u,\"forced\":%s", seed, increment, forced ? "true" : "false");
@@ -378,7 +379,8 @@ static void sync_report(void)
     }
     put("],\"pad\":\"%08x\",\"rng\":[\"%08x\",\"%08x\",\"%08x\",\"%08x\"]",
         fnv(0x003B8F48u, SLOTS * 0x20u), fnv(0x003C1400u, 0x88u), fnv(0x003BFC70u, 4 * 0x88u),
-        fnv(0x0039C0E0u, 0x88u), fnv(0x00376FDCu, 0x88u));
+        defjam_lockstep_enabled() ? defjam_lockstep_utility_state() : fnv(0x0039C0E0u, 0x88u),
+        fnv(0x00376FDCu, 0x88u));
     put(",\"crowd\":[\"%08x\",\"%08x\"]", defjam_crowd_spectator_hash(), defjam_crowd_background_hash());
     end_line();
 }
@@ -461,7 +463,7 @@ void defjam_test_step(void)
         begin_line("TEST-STATE", "sample");
         put(",\"flags\":%u,\"phase\":%u,\"clock\":[%u,%u],\"time_scale\":%.4g,\"rng\":%u,\"rng_util\":%u",
             MEM32(G_FLAGS), MEM32(G_PHASE), MEM32(G_CLOCK_MIN), MEM32(G_CLOCK_SEC), (double)f32(G_TIME_SCALE),
-            MEM32(G_RNG_STATE), MEM32(G_RNG_UTIL));
+            MEM32(G_RNG_STATE), defjam_lockstep_utility_state());
         put_fighters();
         end_line();
     }
@@ -583,17 +585,14 @@ void defjam_test_input(uint32_t actor)
  * RECOMP_TEST_RNG_SEED replaces it, as it does the match generator's seed. */
 void defjam_test_ai_seed(uint32_t stack)
 {
-    const char *want;
     uint32_t seed;
     int forced = 0;
-    if (!defjam_test_observations_enabled()) return;
-    seed = MEM32(stack + 4);
-    want = getenv("RECOMP_TEST_RNG_SEED");
-    if (want && *want) {
-        seed = (uint32_t)strtoul(want, NULL, 0);
+    if (defjam_pinned_seed(&seed)) {
         MEM32(stack + 4) = seed;        /* deliberate, opt-in; see the header */
         forced = 1;
     }
+    if (!defjam_test_observations_enabled()) return;
+    seed = MEM32(stack + 4);
     if (!budget()) return;
     begin_line("TEST-EVENT", "ai_seed");
     put(",\"seed\":%u,\"forced\":%s", seed, forced ? "true" : "false");

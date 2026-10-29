@@ -171,6 +171,11 @@ is pressed, and fight steps do not run while it is up. With `--step-input` the s
 therefore presses A on the pad every half second; during play the step input
 replaces the fighter's pad word, so the presses only close tips.
 
+`--test-env RECOMP_LOCKSTEP=1` runs the fight in lockstep mode (docs/lockstep-mode.md):
+every seed pinned, the crowd fixes on and tips off, without needing
+`RECOMP_TEST_CROWD`. `--test-env` accepts `RECOMP_TEST_*`, `RECOMP_WATCH_*` and
+`RECOMP_LOCKSTEP*`.
+
 ### Per-step fingerprint
 
 `--test-env RECOMP_TEST_SYNC=1` writes a `[TEST-SYNC]` line at every fight step with

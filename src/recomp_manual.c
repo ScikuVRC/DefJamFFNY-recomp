@@ -48,6 +48,9 @@ void defjam_crowd_draw(uint32_t generator, uint32_t caller);
 void defjam_crowd_time(uint32_t self, uint32_t stack);
 int defjam_crowd_rng_swap(int enter);
 void defjam_crowd_spectator_setup(void);
+void defjam_lockstep_tip(void);
+void defjam_lockstep_match_start(void);
+int defjam_lockstep_utility_swap(int enter);
 
 /* Read-only probes use the lifter's universal entry hooks. They do not alter
  * guest registers, stack, memory or the generated body. Off in normal play. */
@@ -106,7 +109,16 @@ void sub_0008BE60_enter(void)
  * through a pause that began in a live fight (issue #95); otherwise no change. */
 void sub_00079B60_enter(void) { if (s_ws_hud_live) ws_hud_heartbeat(); }
 void sub_0007A8F0_enter(void) { if (s_ws_hud_live) ws_hud_heartbeat(); }
-void sub_001A4D90_enter(void) { defjam_test_match_start(); defjam_crowd_match_start(); }
+void sub_001A4D90_enter(void) { defjam_test_match_start(); defjam_crowd_match_start(); defjam_lockstep_match_start(); }
+/* The fight step's use of the utility generator (called by the step and by match set-up):
+ * in lockstep mode it draws from a private copy (src/hooks/lockstep.c). */
+extern void sub_000AC590_gen(void);
+void sub_000AC590(void)
+{
+    int swapped = defjam_lockstep_utility_swap(1);
+    sub_000AC590_gen();
+    if (swapped) defjam_lockstep_utility_swap(0);
+}
 /* Widescreen song notification (src/patches/widescreen.c, issue #118): the APT
  * movie loader (archive, name, &apt, &const), and the next step of the load,
  * which its only caller runs straight after it with the .apt data as its second
@@ -170,6 +182,8 @@ void sub_000AA340_enter(void) { defjam_test_draw(g_ecx, MEM32(g_esp)); defjam_cr
 void sub_000DB870_enter(void) { defjam_test_crowd_update(); defjam_crowd_update(); }
 /* Time added to the background crowd (thiscall, dt); see defjam_crowd_time. */
 void sub_000DB620_enter(void) { defjam_crowd_time(g_ecx, g_esp); }
+/* The first-time help hears of an event and may show a tip; see defjam_lockstep_tip. */
+void sub_000D6670_enter(void) { defjam_lockstep_tip(); }
 /* The spectators' update (thiscall, dt, ret 4), reached only through its vtable; skipped
  * while RECOMP_TEST_CROWD=spect holds them (see defjam_crowd_spectators). */
 extern void sub_00081170_gen(void);

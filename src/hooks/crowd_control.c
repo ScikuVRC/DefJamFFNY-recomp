@@ -61,6 +61,7 @@
 #include "guest_call.h"
 #include "recorder.h"
 #include "test_observations.h"
+#include "lockstep.h"
 
 extern void sub_000AA0D0(void);
 
@@ -81,7 +82,10 @@ static void parse(void)
 {
     const char *spec = getenv("RECOMP_TEST_CROWD");
     s_parsed = 1;
-    if (!spec || !*spec || !defjam_test_observations_enabled())
+    /* Lockstep mode (lockstep.c) needs the crowds repeatable: the three fixes, no probe. */
+    if (defjam_lockstep_enabled() && (!spec || !*spec || !defjam_test_observations_enabled()))
+        spec = "hold,spect,reseed";
+    else if (!spec || !*spec || !defjam_test_observations_enabled())
         return;
     s_probe = strstr(spec, "probe") != NULL;
     s_hold = strstr(spec, "hold") != NULL;
@@ -158,12 +162,10 @@ int defjam_crowd_rng_swap(int enter)
 /* sub_00081240: the spectator manager's set-up (second vtable entry). */
 void defjam_crowd_spectator_setup(void)
 {
-    const char *seed_text;
     uint32_t seed;
     int i;
     if (!active() || !s_spect) return;
-    seed_text = getenv("RECOMP_TEST_RNG_SEED");
-    seed = seed_text && *seed_text ? (uint32_t)strtoul(seed_text, NULL, 0) : 0x5EED;
+    if (!defjam_pinned_seed(&seed)) seed = 0x5EED;
     for (i = 0; i < SHARED_RNG_WORDS - 1; i++) {
         seed = seed * 1664525u + 1013904223u;
         s_private_rng[i] = seed;
@@ -333,9 +335,8 @@ void defjam_crowd_seed(uint32_t generator, uint32_t stack)
      * setup (sub_0008ABF0) and drawn once before the first step, so re-seeding it
      * there is too late: pin its seed where it is made, as the AI seed is. */
     if (generator == 0x00376FDCu) {
-        const char *seed_text = getenv("RECOMP_TEST_RNG_SEED");
-        uint32_t base = seed_text && *seed_text ? (uint32_t)strtoul(seed_text, NULL, 0) : 0;
-        if (base) {
+        uint32_t base;
+        if (defjam_pinned_seed(&base)) {
             MEM32(stack + 4) = base >> 16;          /* as the game splits the counter */
             MEM32(stack + 8) = base & 0xFFFFu;
             fprintf(stderr, "[TEST-CROWD] {\"event\":\"pin_seed\",\"generator\":%u,\"high\":%u,\"low\":%u}\n",
@@ -357,7 +358,6 @@ void defjam_crowd_seed(uint32_t generator, uint32_t stack)
 /* sub_00087700: a fight step is about to run. The first one closes the window. */
 void defjam_crowd_step(void)
 {
-    const char *seed_text;
     uint32_t base;
     int i;
     char fields[224];
@@ -393,8 +393,7 @@ void defjam_crowd_step(void)
     fprintf(stderr, "[TEST-CROWD] {\"event\":\"first_step\",%s}\n", fields);
     recorder_event("crowd", fields);
     if (!s_reseed) return;
-    seed_text = getenv("RECOMP_TEST_RNG_SEED");
-    base = seed_text && *seed_text ? (uint32_t)strtoul(seed_text, NULL, 0) : 0;
+    if (!defjam_pinned_seed(&base)) base = 0;
     if (!base)
         fprintf(stderr, "[TEST-CROWD] {\"event\":\"reseed_without_seed\",\"note\":\"set RECOMP_TEST_RNG_SEED; "
                         "the set-up seeds are reused and one of them comes from the time-stamp counter\"}\n");
