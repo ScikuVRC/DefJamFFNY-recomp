@@ -116,5 +116,13 @@ Terrordome (`RECOMP_NETPLAY_VENUE=6`) started there on both and stayed in sync.
 - TCP: a lost packet stalls both games until it is resent. UDP and rollback later.
 - Only One on One at the default venue with fixed fighters; choosing them is for the
   dialog later.
+- The intermittent start-up stall (stuck at "press start": the USB host controller's
+  first deferred routine ran seconds late and the driver gave up on the pad) is fixed
+  in the toolkit: the timer thread, pinned to the guest core, went unscheduled for
+  3.1 s in about one start in fifteen; it now only prefers that core. 0 stalls in 65
+  starts against 4 in 55. The fix is commit `6cc6238` on the local toolkit branch
+  `defjam/timer-ideal-core` in `tools/xboxrecomp`, not published: the parent's gitlink
+  still points at the published toolkit until that commit is on a fork the project
+  can fetch.
 - A rare wild indirect call in the controller library at boot (`0x27EC6E`, once in 69
-  runs) and the intermittent start-up stall: the USB emulation, not netplay.
+  runs), skipped without harm.
