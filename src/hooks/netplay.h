@@ -46,9 +46,13 @@ int netplay_match(NetplayMatch *out);
 int netplay_startup(void);
 
 /* From the game: a match is being set up / a fight step is about to run. At the
- * first step each game waits until the other has reached it too. */
+ * first step each game waits until the other has reached it too; at every step each
+ * sends its local input for `delay` steps ahead (RECOMP_NETPLAY_DELAY, default 3)
+ * and waits for the other's input for this one. */
 void netplay_match_start(void);
 void netplay_step(void);
+/* sub_001BAA00(record): put the exchanged input in the fighter's pad-table entry. */
+void netplay_input(uint32_t actor);
 
 #ifdef __cplusplus
 }

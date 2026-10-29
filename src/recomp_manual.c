@@ -229,8 +229,13 @@ void sub_00077C40_enter(void) { dev_module_trace(1); }
 void sub_00077A40_enter(void) { dev_module_trace(3); }
 void sub_00077B20_enter(void) { dev_module_trace(4); }
 void sub_00077DD0_enter(void) { dev_module_trace(7); }
-/* The per-fighter pad reader: RECOMP_TEST_INPUT replaces what it is about to read. */
-void sub_001BAA00_enter(void) { defjam_test_input(MEM32(g_esp + 4)); }
+/* The per-fighter pad reader: RECOMP_TEST_INPUT replaces what it is about to read, and
+ * in a netplay match the exchanged input replaces it on both games (netplay.c). */
+void sub_001BAA00_enter(void)
+{
+    defjam_test_input(MEM32(g_esp + 4));
+    netplay_input(MEM32(g_esp + 4));
+}
 void sub_001A6A80_enter(void)
 {
     if (defjam_test_observations_enabled())

@@ -561,6 +561,21 @@ static void input_load(void)
             s_input_count, s_input_slots);
 }
 
+/* The scripted buttons for a slot at a fight step, for netplay's local input in a test
+ * run (netplay.c). Returns 0 when no step-timed input covers that slot. */
+int defjam_test_scripted_input(int slot, long long step, uint32_t *buttons)
+{
+    int i;
+    if (!defjam_test_observations_enabled() || slot < 0 || slot >= SLOTS) return 0;
+    if (s_input_count < 0) input_load();
+    if (!(s_input_slots & (1 << slot))) return 0;
+    *buttons = 0;
+    for (i = 0; i < s_input_count; i++)
+        if (s_input[i].slot == slot && step >= s_input[i].first && step <= s_input[i].last)
+            *buttons |= s_input[i].buttons;
+    return 1;
+}
+
 /* sub_001BAA00(record): a fighter is about to read its pad-table entry. */
 void defjam_test_input(uint32_t actor)
 {

@@ -10,19 +10,20 @@ inputs.
 | 1. Lockstep mode: the same inputs and seed play the same fight on any frame rate | done |
 | 2. Desync check: a per-step fingerprint of the fight (`RECOMP_TEST_SYNC`) | done, test runs only |
 | 3. Match setup: host/join, compatibility check, agreed match, start barrier | done |
-| 4. Lockstep play: exchange inputs every step, input delay, live desync check | next |
+| 4. Lockstep play: exchange inputs every step, input delay, live desync check | done; untested with a real pad and between machines |
 | 5. Rollback, spectating, a relay for players behind routers | later |
 
-## Playing (step 3)
+## Playing
 
 In the launcher, **Online Match**. One player hosts (a port, 7777 by default; it may
 need opening in the router), the other joins with `host-address:port`. When both are
 connected the games check each other and the launcher starts the game, which goes
-straight into the match.
+straight into the match. The host is player 1, the joiner player 2; each plays with
+their first pad (or keyboard).
 
-Until step 4 the inputs are not exchanged: each game's own pad drives player 1 and
-player 2 is the CPU, so the two games show the same fight only as long as both
-players do the same. Step 3 is the plumbing that step 4 plays over.
+Do not pause during the match: pausing is not shared and stops only your game, which
+then waits for the other's inputs. The menus after the match are each player's own;
+the session ends with the match.
 
 ## The session (src/hooks/netplay.c)
 
@@ -46,6 +47,27 @@ and match set-up crashed without one (`sub_001BBC10` on slot 2's record). Step 4
 replaces each fighter's pad word every step from the exchanged inputs (the write the
 step-timed test input already makes), which drives a CPU slot too.
 
+## Inputs (step 4)
+
+Lockstep with an input delay, as in Dolphin. At every fight step each game:
+
+1. reads its player's input: the first six words of slot 0's pad-table entry
+   (`0x3B8F48`; buttons, the change mask and both sticks, which is everything
+   `sub_001BAA00` reads), which the local pad fills on both machines;
+2. sends it for `delay` steps ahead (`IN <step> <6 words>`; `RECOMP_NETPLAY_DELAY`,
+   default 3 steps, 50 ms) and keeps it for that step itself;
+3. waits until it has the other player's input for this step (up to 10 s, then the
+   match goes on locally), and puts both players' inputs in both fighters' entries
+   just before each reads its own (the write the step-timed test input makes; it
+   drives player 2's CPU slot as well).
+
+The first `delay` steps have no inputs on either side. Every 60 steps both games send
+`SYNC <step> <hash>` of the fighters' state, position and health, and each compares
+the other's with its own; a difference is logged as `[NETPLAY] DESYNC`.
+
+In a test run with step-timed input (`--step-input`), the script's buttons for slot 0
+are the local player's input instead of the pad.
+
 ## Scripted sessions
 
 `RECOMP_NETPLAY_HOST=<port>` or `RECOMP_NETPLAY_JOIN=<host:port>` run the same
@@ -62,14 +84,22 @@ python scripts/sync_diff.py A/game.log.err B/game.log.err
 ```
 
 Measured (2026-10-29, two games on one PC): both agreed the seed, started the match
-from the main menu, met at the first step (the joiner arrived 3.4 s after the host,
-which waited), and with the same step-timed input played the same fight for all
-12,187 steps to the same result. The games ended 47 ms apart.
+from the main menu and met at the first step (the second to load waited 1.4 to 3.4 s
+for the first). With different step-timed inputs (host: right and attacks; joiner:
+left and button 0x20) both games played the same 8-minute fight, all 28,684 steps, to
+the same result; player 2 followed the joiner's input on both, not the CPU's. The
+desync check agreed at all 48 points, no step waited 50 ms for an input, and the
+games ended 31 ms apart.
 
 ## Known gaps
 
-- Untested between two machines and over the internet.
-- No input exchange (step 4), so no real two-player match yet.
+- Untested between two machines, over the internet, and with a real pad: the local
+  input is read from slot 0's pad-table entry at the step, which the game refills
+  from the pad every pass (docs/research/fight-determinism.md); a stale entry would
+  echo the exchanged input.
+- Player 2's slot is still the CPU's in the game's own set-up (its name on screen,
+  its AI still running under the input); pausing is not shared.
+- TCP: a lost packet stalls both games until it is resent. UDP and rollback later.
 - Only One on One at the default venue with fixed fighters; choosing them is for the
   dialog later.
 - A rare wild indirect call in the controller library at boot (`0x27EC6E`, once in 69

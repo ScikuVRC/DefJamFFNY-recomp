@@ -48,6 +48,8 @@ typedef int sock_t;
 #include <string.h>
 
 #include "netplay.h"
+#include "recomp/gen/recomp_types.h"
+#include "test_observations.h"
 
 #ifndef DEFJAM_VERSION
 #define DEFJAM_VERSION "dev"
@@ -349,20 +351,44 @@ static int handshake(void)
     return 1;
 }
 
-/* After the agreement the worker only listens: AT <step> from the other game. */
+/* ---- Inputs and the desync check (the game thread and the worker share these) ----- */
+#define RING            512         /* steps of inputs kept; far more than any delay */
+#define ENTRY_WORDS     6           /* what sub_001BAA00 reads of a pad-table entry */
+#define SYNC_EVERY      60          /* steps between desync checks */
+static uint32_t s_inputs[2][RING][ENTRY_WORDS];
+static long s_input_step[2][RING];  /* which step each ring entry holds, per slot */
+static uint32_t s_sync_peer[RING / SYNC_EVERY + 1], s_sync_mine[RING / SYNC_EVERY + 1];
+static long s_sync_peer_step[RING / SYNC_EVERY + 1], s_sync_mine_step[RING / SYNC_EVERY + 1];
+
+/* After the agreement the worker only listens: AT, IN and SYNC from the other game. */
 static void listen_in_game(void)
 {
     char line[256];
     for (;;) {
         int got = recv_line(line, sizeof line, 500);
         long step;
+        uint32_t w[ENTRY_WORDS], hash;
         if (got < 0) {
             fprintf(stderr, "[NETPLAY] the other player's game disconnected\n");
             fflush(stderr);
             lock(); s_peer_at = -2; unlock();
             return;
         }
-        if (got > 0 && sscanf(line, "AT %ld", &step) == 1) {
+        if (got == 0) continue;
+        if (sscanf(line, "IN %ld %x %x %x %x %x %x", &step, &w[0], &w[1], &w[2], &w[3], &w[4], &w[5]) == 7
+            && step > 0) {
+            int remote = 1 - s_match.local_slot;
+            lock();
+            memcpy(s_inputs[remote][step % RING], w, sizeof w);
+            s_input_step[remote][step % RING] = step;
+            unlock();
+        } else if (sscanf(line, "SYNC %ld %x", &step, &hash) == 2 && step > 0) {
+            int i = (int)((step / SYNC_EVERY) % (RING / SYNC_EVERY + 1));
+            lock();
+            s_sync_peer[i] = hash;
+            s_sync_peer_step[i] = step;
+            unlock();
+        } else if (sscanf(line, "AT %ld", &step) == 1) {
             lock();
             if (step > s_peer_at) s_peer_at = step;
             unlock();
@@ -484,39 +510,178 @@ int netplay_startup(void)
     return 1;
 }
 
-/* ---- In game: the start barrier ---------------------------------------------------- */
+/* ---- In game: the start barrier, inputs, the desync check ------------------------ */
+#define ACTORS          0x003B92E0u /* fighter records, 0x12E8 apart */
+#define STRIDE          0x12E8u
+#define PAD_TABLE       0x003B8F48u /* pad-table entries, 0x20 apart, one per slot */
+#define STALL_MS        10000       /* how long to wait for an input before giving up */
+
 static long s_step;
+static int s_delay = -1;
+static uint32_t s_current[2][ENTRY_WORDS];  /* this step's input per slot */
+static long s_current_step;
+static int s_desynced;
+
+static void end_session(const char *why)
+{
+    fprintf(stderr, "[NETPLAY] %s; the match goes on locally\n", why);
+    fflush(stderr);
+    s_session_live = 0;
+}
+
+/* Wait (with the game paused) until `done` says so; 0 when the other game is gone. */
+static int wait_for_peer(int (*done)(void), int limit_ms, int *waited)
+{
+    *waited = 0;
+    for (;;) {
+        long peer;
+        if (done()) return 1;
+        lock(); peer = s_peer_at; unlock();
+        if (peer == -2 || *waited >= limit_ms) return 0;
+        sleep_ms(1);
+        (*waited)++;
+    }
+}
+
+static int peer_at_first_step(void)
+{
+    long peer;
+    lock(); peer = s_peer_at; unlock();
+    return peer >= 1;
+}
+
+static int remote_input_here(void)
+{
+    int remote = 1 - s_match.local_slot, here;
+    lock();
+    here = s_input_step[remote][s_step % RING] == s_step;
+    unlock();
+    return here;
+}
+
+/* The local player's input: the pad-table entry of slot 0, which the local pad fills
+ * on both machines (the match binds pad 0 to slot 0). In a test run with step-timed
+ * input, the script's buttons for slot 0 instead. */
+static void local_input(long step, uint32_t *out)
+{
+    uint32_t i, buttons;
+    for (i = 0; i < ENTRY_WORDS; i++)
+        out[i] = MEM32(PAD_TABLE + i * 4);
+    if (defjam_test_scripted_input(0, step, &buttons)) {
+        memset(out, 0, ENTRY_WORDS * sizeof *out);
+        out[0] = buttons;
+    }
+}
+
+/* A hash of what the fight is: each fighter's state, position and health. */
+static uint32_t fight_hash(void)
+{
+    static const uint32_t fields[][2] = {{0x30, 4}, {0x44, 12}, {0x54, 4}, {0x350, 8}};
+    uint32_t h = 2166136261u, slot, f, i;
+    for (slot = 0; slot < 2; slot++)
+        for (f = 0; f < sizeof fields / sizeof fields[0]; f++)
+            for (i = 0; i < fields[f][1]; i += 4)
+                h = (h ^ MEM32(ACTORS + slot * STRIDE + fields[f][0] + i)) * 16777619u;
+    return h;
+}
+
+static void desync_check(void)
+{
+    int i = (int)((s_step / SYNC_EVERY) % (RING / SYNC_EVERY + 1));
+    int prev = (int)(((s_step / SYNC_EVERY) + RING / SYNC_EVERY) % (RING / SYNC_EVERY + 1));
+    uint32_t mine = fight_hash();
+    long peer_step;
+    uint32_t peer;
+    send_line("SYNC %ld %08x", s_step, mine);
+    s_sync_mine[i] = mine;
+    s_sync_mine_step[i] = s_step;
+    /* The other game's hash for the previous check has had a whole interval to arrive. */
+    lock();
+    peer_step = s_sync_peer_step[prev];
+    peer = s_sync_peer[prev];
+    unlock();
+    if (s_desynced || peer_step != s_step - SYNC_EVERY || s_sync_mine_step[prev] != peer_step) return;
+    if (peer != s_sync_mine[prev]) {
+        s_desynced = 1;
+        fprintf(stderr, "[NETPLAY] DESYNC: the two games differ at step %ld (%08x here, %08x there)\n",
+                peer_step, s_sync_mine[prev], peer);
+    } else if (peer_step % 600 == 0) {
+        fprintf(stderr, "[NETPLAY] in sync at step %ld\n", peer_step);
+    }
+    fflush(stderr);
+}
 
 void netplay_match_start(void)
 {
     s_step = 0;
+    s_current_step = 0;
+    s_desynced = 0;
 }
 
 void netplay_step(void)
 {
-    int waited = 0;
+    int local = s_match.local_slot, remote = 1 - local, waited;
+    uint32_t mine[ENTRY_WORDS];
     if (!s_session_live) return;
+    if (s_delay < 0) {
+        const char *d = getenv("RECOMP_NETPLAY_DELAY");
+        s_delay = d && *d ? atoi(d) : 3;
+        if (s_delay < 1) s_delay = 1;
+        if (s_delay > 30) s_delay = 30;
+    }
     s_step++;
-    if (s_step != 1) return;
-    /* Both games are at the first step of the same match; whichever got here first
-     * waits for the other, so the fight starts on both together. */
-    send_line("AT %ld", s_step);
-    fprintf(stderr, "[NETPLAY] at the first step; waiting for the other player\n");
-    fflush(stderr);
-    for (;;) {
-        long peer;
-        lock(); peer = s_peer_at; unlock();
-        if (peer >= s_step) break;
-        if (peer == -2 || waited >= BARRIER_MS) {
-            fprintf(stderr, "[NETPLAY] the other player %s; playing on alone\n",
-                    peer == -2 ? "disconnected" : "did not arrive");
-            fflush(stderr);
-            s_session_live = 0;
+    if (s_step == 1) {
+        /* Both games are at the first step of the same match; whichever got here
+         * first waits for the other, so the fight starts on both together. */
+        send_line("AT 1");
+        fprintf(stderr, "[NETPLAY] at the first step; waiting for the other player\n");
+        fflush(stderr);
+        if (!wait_for_peer(peer_at_first_step, BARRIER_MS, &waited)) {
+            end_session(s_peer_at == -2 ? "the other player disconnected" : "the other player did not arrive");
             return;
         }
-        sleep_ms(1);
-        waited++;
+        fprintf(stderr, "[NETPLAY] both players at the first step after %d ms: fight (input delay %d steps)\n",
+                waited, s_delay);
+        fflush(stderr);
     }
-    fprintf(stderr, "[NETPLAY] both players at the first step after %d ms: fight\n", waited);
-    fflush(stderr);
+
+    /* This step's local input is played `delay` steps from now, on both games. */
+    local_input(s_step, mine);
+    lock();
+    memcpy(s_inputs[local][(s_step + s_delay) % RING], mine, sizeof mine);
+    s_input_step[local][(s_step + s_delay) % RING] = s_step + s_delay;
+    unlock();
+    send_line("IN %ld %08x %08x %08x %08x %08x %08x", s_step + s_delay,
+              mine[0], mine[1], mine[2], mine[3], mine[4], mine[5]);
+
+    /* The first `delay` steps have no inputs on either side: both play them empty. */
+    if (s_step <= s_delay) {
+        memset(s_current, 0, sizeof s_current);
+    } else {
+        if (!wait_for_peer(remote_input_here, STALL_MS, &waited)) {
+            end_session(s_peer_at == -2 ? "the other player disconnected" : "the other player stopped sending");
+            return;
+        }
+        if (waited > 50)
+            fprintf(stderr, "[NETPLAY] waited %d ms for the other player's input at step %ld\n", waited, s_step);
+        lock();
+        memcpy(s_current[local], s_inputs[local][s_step % RING], sizeof s_current[local]);
+        memcpy(s_current[remote], s_inputs[remote][s_step % RING], sizeof s_current[remote]);
+        unlock();
+    }
+    s_current_step = s_step;
+    if (s_step % SYNC_EVERY == 0)
+        desync_check();
+}
+
+/* sub_001BAA00(record): a fighter is about to read its pad-table entry. Both games put
+ * the same exchanged input there for both fighters. */
+void netplay_input(uint32_t actor)
+{
+    uint32_t slot, i;
+    if (!s_session_live || !s_current_step) return;
+    if (actor < ACTORS || actor >= ACTORS + 2 * STRIDE || (actor - ACTORS) % STRIDE) return;
+    slot = (actor - ACTORS) / STRIDE;
+    for (i = 0; i < ENTRY_WORDS; i++)
+        MEM32(PAD_TABLE + slot * 0x20u + i * 4) = s_current[slot][i];
 }

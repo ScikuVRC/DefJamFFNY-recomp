@@ -14,6 +14,7 @@ void defjam_test_attack(int attacker_slot, int defender_slot);
 void defjam_test_damage(int defender_slot, float before, float after);
 void defjam_test_result(uint32_t winners, uint32_t losers, uint32_t code);
 void defjam_test_input(uint32_t actor);
+int defjam_test_scripted_input(int slot, long long step, uint32_t *buttons);
 void defjam_test_ai_seed(uint32_t stack);
 long defjam_test_shot_due(void);
 void defjam_test_generator_seed(uint32_t generator, uint32_t stack);
