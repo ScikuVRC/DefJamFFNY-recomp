@@ -35,6 +35,7 @@
 #include "pc_ui_theme.h"
 #include "pc_ui_actions.h"
 #include "pc_launcher_home.h"
+#include "netplay.h"
 
 #include "imgui.h"
 #if defined(_WIN32)
@@ -1397,6 +1398,57 @@ static void page_debug(UiMode mode)
 
 static int g_page = 0;
 static bool g_advanced = false, g_select_page = false, g_return_focus = false, g_setup_request = false;
+static bool g_online_request = false;
+
+// Online Match: host or join a netplay session (src/hooks/netplay.c). When both games
+// have agreed the match, the launcher closes and the game starts it.
+static void ui_online_match(UiResult &result, float width, float scale)
+{
+    static char port[8] = "7777", address[128] = "";
+    NetplayState state = netplay_state();
+    bool busy = state == NETPLAY_LISTENING || state == NETPLAY_CONNECTING || state == NETPLAY_HANDSHAKE;
+    char status[160];
+    if (!ImGui::BeginPopupModal("Online Match", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+        return;
+    ImGui::PushTextWrapPos(std::min(ImGui::GetFontSize() * 34, std::max(120.0f, width - 100 * scale)));
+    ImGui::TextWrapped("Play a One on One against someone with the same version and the same game "
+                       "dump. One player hosts; the other joins with the host's address. The host "
+                       "may need to open the port in their router.");
+    ImGui::BeginDisabled(busy || state == NETPLAY_READY);
+    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
+    ImGui::InputText("Port", port, sizeof port, ImGuiInputTextFlags_CharsDecimal);
+    ImGui::SameLine();
+    if (ImGui::Button("Host"))
+        netplay_host((uint16_t)atoi(port));
+    ui_target("OnlineHost");
+    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 14);
+    ImGui::InputTextWithHint("Address", "host:7777", address, sizeof address);
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!address[0]);
+    if (ImGui::Button("Join"))
+        netplay_join(address);
+    ui_target("OnlineJoin");
+    ImGui::EndDisabled();
+    ImGui::EndDisabled();
+    netplay_status(status, sizeof status);
+    if (status[0])
+        ImGui::TextWrapped("%s", status);
+    if (state == NETPLAY_READY)
+    {
+        // Both sides agreed: start the game, which goes straight into the match.
+        result.play = true;
+        ImGui::CloseCurrentPopup();
+    }
+    if (ImGui::Button(busy ? "Cancel" : "Close"))
+    {
+        if (busy)
+            netplay_cancel();
+        else
+            ImGui::CloseCurrentPopup();
+    }
+    ImGui::PopTextWrapPos();
+    ImGui::EndPopup();
+}
 static std::string g_home_return = "Advanced";
 static const char *page_names[] = {"Display", "Controls", "Mods", "Interface", "Diagnostics", "Maintenance"};
 static void controls_page()
@@ -1467,6 +1519,8 @@ UiResult ui_draw(UiMode mode, float x, float y, float width, float height)
         }
         if (home.route == 4)
             g_setup_request = true;
+        if (home.route == 5)
+            g_online_request = true;
     }
     else
     {
@@ -1646,6 +1700,12 @@ UiResult ui_draw(UiMode mode, float x, float y, float width, float height)
         ImGui::OpenPopup("Update / Repair");
         g_setup_request = false;
     }
+    if (g_online_request)
+    {
+        ImGui::OpenPopup("Online Match");
+        g_online_request = false;
+    }
+    ui_online_match(result, width, scale);
     ImGui::SetNextWindowSizeConstraints(
         ImVec2(0, 0), ImVec2(std::max(200.0f, width - 32 * scale), std::max(160.0f, height - 32 * scale)));
     if (ImGui::BeginPopupModal("Update / Repair", nullptr, ImGuiWindowFlags_AlwaysAutoResize))

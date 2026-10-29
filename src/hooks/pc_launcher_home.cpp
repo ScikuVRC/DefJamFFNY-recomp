@@ -74,12 +74,12 @@ static void ui_home_play_row(UiHomeResult &r, float w, ImVec4 accent)
     if (ImGui::IsWindowAppearing())
         ImGui::SetItemDefaultFocus();
     ImGui::SameLine(0, 16 * s);
-    // Online play is planned; keep its place in the layout without a dead control.
-    ImGui::BeginDisabled(true);
-    pcui::accent_button("ONLINE MATCH", ImVec2(std::min(220 * s, w * .35f), buttons), 22, accent, true);
+    // Host or join a netplay session (pc_ui.cpp, ui_online_match).
+    ImGui::BeginDisabled(pcui::mod_busy() || pcui::mod_recovery_needed());
+    if (pcui::accent_button("ONLINE MATCH", ImVec2(std::min(220 * s, w * .35f), buttons), 22, accent, true))
+        r.route = 5;
+    ui_target("Online");
     ImGui::EndDisabled();
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-        ImGui::SetTooltip("Online play is coming in a future update.");
 }
 
 // "City in Hand" poster, drawn when the player supplied cover art from their own copy

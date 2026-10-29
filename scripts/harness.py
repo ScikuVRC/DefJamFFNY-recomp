@@ -281,6 +281,13 @@ ROUTES = {
         "until": "game.startgame(", "after": 120, "secs": 420,
         "shots": "@game.startgame(,60,110",
     },
+    "netplay": {
+        "help": "a netplay session (RECOMP_NETPLAY_HOST or _JOIN): no menu presses; the session "
+                "starts the agreed match from the main menu; until the match summary",
+        "stages": ["getscreeninfo(intmain/mainmenu=back@9999"],
+        "until": "game.getmatchsummary(", "after": 6, "secs": 900,
+        "shots": "",
+    },
     "fight-result": {
         "help": "One on One at the default venue, played until the game shows the match summary",
         "stages": ONE_ON_ONE_SETUP + ["controllersetup(1,=a@4+4x6"],

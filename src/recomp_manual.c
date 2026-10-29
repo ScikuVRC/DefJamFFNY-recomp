@@ -51,6 +51,7 @@ void defjam_crowd_spectator_setup(void);
 void defjam_lockstep_tip(void);
 void defjam_lockstep_match_start(void);
 int defjam_lockstep_utility_swap(int enter);
+#include "hooks/netplay.h"
 
 /* Read-only probes use the lifter's universal entry hooks. They do not alter
  * guest registers, stack, memory or the generated body. Off in normal play. */
@@ -89,6 +90,7 @@ static void ws_hud_heartbeat(void)
 void sub_00087700_enter(void)
 {
     defjam_crowd_step();
+    netplay_step();         /* after the crowd's first-step work: both games then start together */
     defjam_test_step();
     s_ws_hud_live = 1;
     ws_hud_heartbeat();
@@ -109,7 +111,13 @@ void sub_0008BE60_enter(void)
  * through a pause that began in a live fight (issue #95); otherwise no change. */
 void sub_00079B60_enter(void) { if (s_ws_hud_live) ws_hud_heartbeat(); }
 void sub_0007A8F0_enter(void) { if (s_ws_hud_live) ws_hud_heartbeat(); }
-void sub_001A4D90_enter(void) { defjam_test_match_start(); defjam_crowd_match_start(); defjam_lockstep_match_start(); }
+void sub_001A4D90_enter(void)
+{
+    defjam_test_match_start();
+    defjam_crowd_match_start();
+    defjam_lockstep_match_start();
+    netplay_match_start();
+}
 /* The fight step's use of the utility generator (called by the step and by match set-up):
  * in lockstep mode it draws from a private copy (src/hooks/lockstep.c). */
 extern void sub_000AC590_gen(void);

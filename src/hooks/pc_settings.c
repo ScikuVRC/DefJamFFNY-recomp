@@ -538,6 +538,15 @@ int pc_settings_init(void)
 
     pc_input_start();
     run_launcher_if_wanted();
+    /* A netplay session (from the launcher, or RECOMP_NETPLAY_HOST/JOIN in a scripted
+     * run) sets lockstep mode and the match's start before anything reads them. */
+    {
+        extern int netplay_startup(void);
+        if (!netplay_startup()) {
+            host_fatal("The netplay session could not be set up.\n\nSee the log for the reason.");
+            return 0;
+        }
+    }
     {
         extern int pc_mods_game_lock(void);
         if (!pc_mods_game_lock()) {
