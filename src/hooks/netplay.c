@@ -94,6 +94,7 @@ static uint16_t s_port;
 static char s_address[128];
 static sock_t s_sock = SOCK_BAD;
 static long s_peer_at = -1;         /* the highest step the other game has reached */
+static int s_want_venue = DEFAULT_VENUE, s_want_fighter[2] = {DEFAULT_F0, DEFAULT_F1};   /* the host's choice */
 static char s_fp_program[24], s_fp_data[24];
 
 static void set_state(NetplayState state, const char *format, ...)
@@ -321,9 +322,11 @@ static int handshake(void)
 #else
         m.seed = fixed && *fixed ? (uint32_t)strtoul(fixed, NULL, 0) : (uint32_t)time(NULL) ^ (uint32_t)getpid() * 2654435761u;
 #endif
-        m.venue = DEFAULT_VENUE;
-        m.fighter[0] = DEFAULT_F0;
-        m.fighter[1] = DEFAULT_F1;
+        lock();
+        m.venue = s_want_venue;
+        m.fighter[0] = s_want_fighter[0];
+        m.fighter[1] = s_want_fighter[1];
+        unlock();
         m.local_slot = 0;
         if (!send_line("MATCH %u %d %d %d", m.seed, m.venue, m.fighter[0], m.fighter[1])) return 0;
         while ((got = recv_line(line, sizeof line, 200)) == 0)
@@ -443,6 +446,15 @@ static int start_session(void)
     return 1;
 }
 
+void netplay_choose(int venue, int fighter0, int fighter1)
+{
+    if (s_inited) lock();
+    s_want_venue = venue > 0 ? venue : DEFAULT_VENUE;
+    s_want_fighter[0] = fighter0 > 0 ? fighter0 : DEFAULT_F0;
+    s_want_fighter[1] = fighter1 > 0 ? fighter1 : DEFAULT_F1;
+    if (s_inited) unlock();
+}
+
 int netplay_host(uint16_t port)
 {
     s_hosting = 1;
@@ -481,6 +493,10 @@ int netplay_startup(void)
     char text[512];
     if (s_inited && netplay_state() == NETPLAY_IDLE) return 1;
     if (!s_inited || netplay_state() == NETPLAY_FAILED) {
+        const char *venue = getenv("RECOMP_NETPLAY_VENUE"), *fighters = getenv("RECOMP_NETPLAY_FIGHTERS");
+        int f0 = 0, f1 = 0;
+        if (fighters) sscanf(fighters, "%d,%d", &f0, &f1);
+        netplay_choose(venue ? atoi(venue) : 0, f0, f1);
         if (host && *host) netplay_host((uint16_t)atoi(host));
         else if (join && *join) netplay_join(join);
         else return 1;                              /* no netplay asked for */

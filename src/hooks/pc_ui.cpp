@@ -1405,6 +1405,11 @@ static bool g_online_request = false;
 static void ui_online_match(UiResult &result, float width, float scale)
 {
     static char port[8] = "7777", address[128] = "";
+    // Venues by their Game.ChooseVenue index (config/scenario-catalog.json); fighters by
+    // the front end's numbers, whose names are not mapped yet.
+    static const char *venue_names[] = {"Foundation", "Terrordome", "Hunt's Point", "The Pit"};
+    static const int venue_index[] = {1, 6, 14, 19};
+    static int venue = 0, fighter[2] = {56, 55};
     NetplayState state = netplay_state();
     bool busy = state == NETPLAY_LISTENING || state == NETPLAY_CONNECTING || state == NETPLAY_HANDSHAKE;
     char status[160];
@@ -1415,11 +1420,25 @@ static void ui_online_match(UiResult &result, float width, float scale)
                        "dump. One player hosts; the other joins with the host's address. The host "
                        "may need to open the port in their router.");
     ImGui::BeginDisabled(busy || state == NETPLAY_READY);
+    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10);
+    ImGui::Combo("Venue (host)", &venue, venue_names, IM_ARRAYSIZE(venue_names));
+    if (ImGui::TreeNode("Fighters (host, advanced)"))
+    {
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6);
+        ImGui::InputInt("Player 1", &fighter[0]);
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6);
+        ImGui::InputInt("Player 2", &fighter[1]);
+        ImGui::TextDisabled("The front end's fighter numbers; 56 and 55 are the defaults.");
+        ImGui::TreePop();
+    }
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 5);
     ImGui::InputText("Port", port, sizeof port, ImGuiInputTextFlags_CharsDecimal);
     ImGui::SameLine();
     if (ImGui::Button("Host"))
+    {
+        netplay_choose(venue_index[venue], fighter[0], fighter[1]);
         netplay_host((uint16_t)atoi(port));
+    }
     ui_target("OnlineHost");
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 14);
     ImGui::InputTextWithHint("Address", "host:7777", address, sizeof address);

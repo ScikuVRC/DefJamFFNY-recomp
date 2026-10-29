@@ -19,7 +19,9 @@ In the launcher, **Online Match**. One player hosts (a port, 7777 by default; it
 need opening in the router), the other joins with `host-address:port`. When both are
 connected the games check each other and the launcher starts the game, which goes
 straight into the match. The host is player 1, the joiner player 2; each plays with
-their first pad (or keyboard).
+their first pad (or keyboard). The host chooses the venue (Foundation, Terrordome,
+Hunt's Point, The Pit) and, under "Fighters (advanced)", the fighters by the front
+end's numbers (56 and 55 by default; their names are not mapped yet).
 
 Do not pause during the match: pausing is not shared and stops only your game, which
 then waits for the other's inputs. The menus after the match are each player's own;
@@ -72,7 +74,8 @@ are the local player's input instead of the pad.
 
 `RECOMP_NETPLAY_HOST=<port>` or `RECOMP_NETPLAY_JOIN=<host:port>` run the same
 session headlessly at start-up (`netplay_startup`, after the launcher), and
-`RECOMP_NETPLAY_SEED` fixes the host's seed. The harness route `netplay` boots with
+`RECOMP_NETPLAY_SEED` fixes the host's seed, `RECOMP_NETPLAY_VENUE` (a ChooseVenue
+index) and `RECOMP_NETPLAY_FIGHTERS` (`f0,f1`) the host's match. The harness route `netplay` boots with
 no menu presses and ends at the match summary:
 
 ```
@@ -91,14 +94,21 @@ the same result; player 2 followed the joiner's input on both, not the CPU's. Th
 desync check agreed at all 48 points, no step waited 50 ms for an input, and the
 games ended 31 ms apart.
 
+With the live pad instead (the emulated USB pad, the path a real pad takes; harness
+routes `netplay-pad` and `netplay-pad-left`, presses timed by the host's clock), the
+two games played the same 12-minute fight, all 43,280 steps, to the same result, with
+the desync check agreeing at all 73 points and no input stall: the local input read
+from the pad-table entry is the pad's, not an echo. A session the host set to the
+Terrordome (`RECOMP_NETPLAY_VENUE=6`) started there on both and stayed in sync.
+
 ## Known gaps
 
-- Untested between two machines, over the internet, and with a real pad: the local
-  input is read from slot 0's pad-table entry at the step, which the game refills
-  from the pad every pass (docs/research/fight-determinism.md); a stale entry would
-  echo the exchanged input.
+- Untested between two machines, over the internet, and with a physical pad (the
+  emulated USB pad it was tested with is the same path).
+- Pausing is not shared: the pause menu's trigger is not found yet
+  (`sub_0007A0C0` only creates the menu object at match set-up).
 - Player 2's slot is still the CPU's in the game's own set-up (its name on screen,
-  its AI still running under the input); pausing is not shared.
+  its AI still running under the input).
 - TCP: a lost packet stalls both games until it is resent. UDP and rollback later.
 - Only One on One at the default venue with fixed fighters; choosing them is for the
   dialog later.

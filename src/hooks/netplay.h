@@ -27,6 +27,10 @@ typedef struct {
     int local_slot;         /* 0 on the host, 1 on the joiner */
 } NetplayMatch;
 
+/* The host's choice of venue (Game.ChooseVenue index) and fighters (the front end's
+ * fighter numbers); 0 keeps the default. Sent to the joiner with the match. */
+void netplay_choose(int venue, int fighter0, int fighter1);
+
 /* Start a session in the background; poll netplay_state() for progress. */
 int netplay_host(uint16_t port);
 int netplay_join(const char *address);     /* "host[:port]" */

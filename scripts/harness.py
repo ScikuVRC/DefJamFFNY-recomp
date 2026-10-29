@@ -288,6 +288,24 @@ ROUTES = {
         "until": "game.getmatchsummary(", "after": 6, "secs": 900,
         "shots": "",
     },
+    # The same with a player on the live pad (the emulated USB pad, as a real one), from
+    # 25 s after the main menu when the match has loaded: walking right and attacking,
+    # or (-left) walking left with B and Y, for the other side of a session.
+    "netplay-pad": {
+        "help": "netplay with live pad input: right and every attack",
+        "stages": ["getscreeninfo(intmain/mainmenu=back@9999"],
+        "tail": "@getscreeninfo(intmain/mainmenu,right:25:1200:4:1.2,x:27:1200:0.8:0.15,"
+                "y:27.2:1200:0.8:0.15,a:27.4:1200:0.8:0.15,b:27.6:1200:0.8:0.15",
+        "until": "game.getmatchsummary(", "after": 6, "secs": 900,
+        "shots": "",
+    },
+    "netplay-pad-left": {
+        "help": "netplay with live pad input: left, B and Y",
+        "stages": ["getscreeninfo(intmain/mainmenu=back@9999"],
+        "tail": "@getscreeninfo(intmain/mainmenu,left:25:1200:3:1.5,b:26:1200:1.1:0.2,y:26.5:1200:1.1:0.2",
+        "until": "game.getmatchsummary(", "after": 6, "secs": 900,
+        "shots": "",
+    },
     "fight-result": {
         "help": "One on One at the default venue, played until the game shows the match summary",
         "stages": ONE_ON_ONE_SETUP + ["controllersetup(1,=a@4+4x6"],
