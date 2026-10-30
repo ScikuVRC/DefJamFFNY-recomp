@@ -84,6 +84,8 @@ static int net_init(void) { return 1; }
 #endif
 
 /* ---- Session state (under the lock) ------------------------------------------- */
+/* The lock exists from the first session on; before it there is no worker thread, and
+ * the launcher reads the state every frame, so the readers skip it until then. */
 static int s_inited;
 static volatile int s_cancel;
 static NetplayState s_state = NETPLAY_IDLE;
@@ -100,12 +102,12 @@ static char s_fp_program[24], s_fp_data[24];
 static void set_state(NetplayState state, const char *format, ...)
 {
     va_list args;
-    lock();
+    if (s_inited) lock();
     s_state = state;
     va_start(args, format);
     vsnprintf(s_status, sizeof s_status, format, args);
     va_end(args);
-    unlock();
+    if (s_inited) unlock();
     fprintf(stderr, "[NETPLAY] %s\n", s_status);
     fflush(stderr);
 }
@@ -113,26 +115,26 @@ static void set_state(NetplayState state, const char *format, ...)
 NetplayState netplay_state(void)
 {
     NetplayState state;
-    lock();
+    if (s_inited) lock();
     state = s_state;
-    unlock();
+    if (s_inited) unlock();
     return state;
 }
 
 void netplay_status(char *out, int size)
 {
-    lock();
+    if (s_inited) lock();
     snprintf(out, (size_t)size, "%s", s_status);
-    unlock();
+    if (s_inited) unlock();
 }
 
 int netplay_match(NetplayMatch *out)
 {
     int ok;
-    lock();
+    if (s_inited) lock();
     ok = s_state == NETPLAY_READY;
     if (ok) *out = s_match;
-    unlock();
+    if (s_inited) unlock();
     return ok;
 }
 
